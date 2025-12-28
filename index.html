@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>NFS-Style Web Racing</title>
+  <style>
+    body { margin:0; overflow:hidden; background:#000; font-family:Arial, sans-serif; color:#fff; }
+    #hud{
+      position:fixed; bottom:20px; left:20px;
+      background:rgba(0,0,0,0.7);
+      padding:15px 25px;
+      border-radius:15px;
+      box-shadow:0 0 30px rgba(0,255,255,0.5);
+      display:none;
+      font-size:18px;
+    }
+    #hud span{ color:#0ff; font-weight:bold; font-size:22px; }
+    #homeScreen {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background:linear-gradient(135deg, #0a0a0a 0%, #1a0033 100%);
+      display:flex; flex-direction:column; justify-content:center; align-items:center;
+      z-index:10;
+    }
+    h1 { font-size:60px; color:#0ff; text-shadow:0 0 20px #0ff; margin-bottom:30px; }
+    button {
+      background:linear-gradient(135deg, #ff0080 0%, #ff8c00 100%);
+      color:#fff; border:none; padding:20px 50px; margin:10px; border-radius:10px;
+      cursor:pointer; font-size:24px; font-weight:bold;
+      box-shadow:0 0 20px rgba(255,0,128,0.5);
+      transition: all 0.3s;
+    }
+    button:hover { 
+      transform:scale(1.1); 
+      box-shadow:0 0 30px rgba(255,140,0,0.8);
+    }
+  </style>
+</head>
+<body>
+<div id="homeScreen">
+  <h1>🏎️ NFS RACING 🏎️</h1>
+  <button id="startGame">START RACE</button>
+</div>
+<div id="hud">
+  Speed: <span id="speed">0</span> km/h | 
+  Hits: <span id="hits">0</span>/3 | 
+  Level: <span id="level">1</span> | 
+  Distance: <span id="distance">0</span>m | 
+  Weather: <span id="weather">Clear</span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+let gameState = 'home';
+
+document.getElementById('startGame').addEventListener('click', () => {
+  gameState = 'game';
+  document.getElementById('homeScreen').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  initGame();
+});
+
+let scene, camera, renderer, car, aiCars = [], obstacles = [], buildings = [], repairKits = [], rainParticles = [], physics, keys, speed, playerHits, level, distance, steerInput, body, driftPower, weatherType;
+
+function initGame() {
+  scene = new THREE.Scene();
+  camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+  renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(window.devicePixelRatio);
+  document.body.appendChild(renderer.domElement);
+
+  window.addEventListener('resize',()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  speed = 0;
+  playerHits = 0;
+  level = 1;
+  distance = 0;
+  steerInput = 0;
+  driftPower = 0;
+
+  physics = {
+    maxSpeed:450,
+    accel:250,
+    turn:2.5,
+    friction:0.988,
+    steerSmooth:0.8
+  };
+
+  keys = {};
+  window.addEventListener('keydown',e=>keys[e.key]=true);
+  window.addEventListener('keyup',e=>keys[e.key]=false);
+
+  const weatherTypes = ['Clear', 'Light Rain', 'Heavy Rain', 'Snow', 'Fog', 'Storm'];
+  weatherType = weatherTypes[Math.floor(Math.random() * weatherTypes.length)];
+
+  // Create weather particles
+  rainParticles = [];
+  if(weatherType.includes('Rain') || weatherType === 'Snow' || weatherType === 'Storm'){
+    const particleCount = weatherType === 'Heavy Rain' || weatherType === 'Storm' ? 300 : weatherType === 'Snow' ? 200 : 150;
+    for(let i=0; i<particleCount; i++){
+      let particle;
+      if(weatherType === 'Snow'){
+        particle = new THREE.Mesh(
+          new THREE.SphereGeometry(0.08, 8, 8),
+          new THREE.MeshBasicMaterial({color:0xffffff})
+        );
+      } else {
+        particle = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.02, 0.02, 0.6, 8),
+          new THREE.MeshBasicMaterial({color:0x8888ff})
+        );
+      }
+      particle.position.set(
+        (Math.random()-0.5)*200, 
+        Math.random()*30 + 5, 
+        (Math.random()-0.5)*200
+      );
+      scene.add(particle);
+      rainParticles.push(particle);
+    }
+  }
+
+  // LEVEL 1: City Streets (Red/Orange theme)
+  function createLevel1() {
+    scene.background = new THREE.Color(0x1a0808);
+    scene.fog = new THREE.Fog(0x330000, 50, 300);
+    
+    const ambLight = new THREE.AmbientLight(0xff6644, 0.4);
+    scene.add(ambLight);
+    const sun = new THREE.DirectionalLight(0xff8844, 0.8);
+    sun.position.set(50,80,20);
+    scene.add(sun);
+
+    // Road
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 1200),
+      new THREE.MeshStandardMaterial({ color:0x1a1a1a })
+    );
+    road.rotation.x = -Math.PI/2;
+    road.position.z = -600;
+    scene.add(road);
+    
+    // Lane lines
+    for(let i=0; i<60; i++){
+      const line = new THREE.Mesh(
+        new THREE.BoxGeometry(0.3, 0.1, 8),
+        new THREE.MeshBasicMaterial({ color:0xffaa00 })
+      );
+      line.position.set(0, 0.1, -i*20);
+      scene.add(line);
+    }
+
+    // Street lights
+    for(let i=0; i<50; i++){
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.2, 0.2, 8, 8),
+        new THREE.MeshStandardMaterial({ color:0x333333 })
+      );
+      pole.position.set((i%2===0?1:-1)*16, 4, -i*25);
+      scene.add(pole);
+      
+      const light = new THREE.PointLight(0xff8800, 2, 20);
+      light.position.set((i%2===0?1:-1)*16, 7, -i*25);
+      scene.add(light);
+    }
+
+    // Red/orange obstacles (traffic cones and barriers)
+    for(let i=0; i<35; i++){
+      const isCone = Math.random() > 0.5;
+      let obs;
+      if(isCone){
+        obs = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.5, 1, 2, 8),
+          new THREE.MeshStandardMaterial({ color:0xff4400, emissive:0xff2200, emissiveIntensity:0.3 })
+        );
+      } else {
+        obs = new THREE.Mesh(
+          new THREE.BoxGeometry(3, 1.5, 1),
+          new THREE.MeshStandardMaterial({ color:0xff6600, emissive:0xff3300, emissiveIntensity:0.3 })
+        );
+      }
+      const lanes = [-8, -4, 0, 4, 8];
+      obs.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1, -30 - i*28);
+      obs.userData = { hit: false };
+      scene.add(obs);
+      obstacles.push(obs);
+    }
+
+    // Buildings (dark red)
+    for(let i=0; i<80; i++){
+      const height = 8 + Math.random()*20;
+      const building = new THREE.Mesh(
+        new THREE.BoxGeometry(6, height, 6),
+        new THREE.MeshStandardMaterial({ color:0x331111, emissive:0x220000, emissiveIntensity:0.2 })
+      );
+      building.position.set((Math.random()>0.5?1:-1)*(20+Math.random()*10), height/2, -i*15);
+      building.userData = { hit: false };
+      scene.add(building);
+      buildings.push(building);
+    }
+
+    // Repair kits for level 1
+    for(let i=0; i<3; i++){
+      const kit = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 0.8, 1.2),
+        new THREE.MeshStandardMaterial({ 
+          color:0x00ff00, 
+          emissive:0x00ff00, 
+          emissiveIntensity:0.5 
+        })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      kit.position.set(lanes[Math.floor(Math.random()*lanes.length)], 0.4, -100 - i*280);
+      kit.userData = { collected: false };
+      scene.add(kit);
+      repairKits.push(kit);
+    }
+  }
+
+  // LEVEL 2: Industrial Zone (Orange/Yellow theme)
+  function createLevel2() {
+    scene.background = new THREE.Color(0x1a1008);
+    scene.fog = new THREE.Fog(0x332200, 50, 250);
+    
+    scene.children = scene.children.filter(c => c === car || aiCars.includes(c));
+    
+    const ambLight = new THREE.AmbientLight(0xffaa44, 0.5);
+    scene.add(ambLight);
+    const sun = new THREE.DirectionalLight(0xffcc66, 0.7);
+    sun.position.set(-50,80,20);
+    scene.add(sun);
+
+    // Road
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 1200),
+      new THREE.MeshStandardMaterial({ color:0x2a2010 })
+    );
+    road.rotation.x = -Math.PI/2;
+    road.position.z = -1600;
+    scene.add(road);
+
+    // Orange cylinders (barrels)
+    for(let i=0; i<40; i++){
+      const barrel = new THREE.Mesh(
+        new THREE.CylinderGeometry(1, 1, 2.5, 12),
+        new THREE.MeshStandardMaterial({ color:0xff8800, metalness:0.6, roughness:0.3 })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      barrel.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1.25, -1030 - i*25);
+      barrel.userData = { hit: false };
+      scene.add(barrel);
+      obstacles.push(barrel);
+    }
+
+    // Industrial structures (yellow metal)
+    for(let i=0; i<60; i++){
+      const height = 5 + Math.random()*15;
+      const structure = new THREE.Mesh(
+        new THREE.BoxGeometry(8, height, 8),
+        new THREE.MeshStandardMaterial({ color:0x886600, metalness:0.7, roughness:0.4 })
+      );
+      structure.position.set((Math.random()>0.5?1:-1)*(22+Math.random()*8), height/2, -1000 - i*20);
+      structure.userData = { hit: false };
+      scene.add(structure);
+      buildings.push(structure);
+    }
+
+    // Smoke stacks with lights
+    for(let i=0; i<20; i++){
+      const stack = new THREE.Mesh(
+        new THREE.CylinderGeometry(2, 2, 25, 12),
+        new THREE.MeshStandardMaterial({ color:0x444444, metalness:0.5 })
+      );
+      stack.position.set((Math.random()>0.5?1:-1)*30, 12.5, -1000 - i*60);
+      scene.add(stack);
+      
+      const glow = new THREE.PointLight(0xff6600, 3, 30);
+      glow.position.set(stack.position.x, 25, stack.position.z);
+      scene.add(glow);
+    }
+  }
+
+  // LEVEL 3: Neon Highway (Blue/Purple theme)
+  function createLevel3() {
+    scene.background = new THREE.Color(0x05051a);
+    scene.fog = new THREE.Fog(0x110033, 50, 300);
+    
+    scene.children = scene.children.filter(c => c === car || aiCars.includes(c));
+    
+    const ambLight = new THREE.AmbientLight(0x6644ff, 0.6);
+    scene.add(ambLight);
+    const sun = new THREE.DirectionalLight(0x8866ff, 0.5);
+    sun.position.set(0,80,-50);
+    scene.add(sun);
+
+    // Road (purple tint)
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 1200),
+      new THREE.MeshStandardMaterial({ color:0x1a0a2a, emissive:0x220044, emissiveIntensity:0.3 })
+    );
+    road.rotation.x = -Math.PI/2;
+    road.position.z = -2600;
+    scene.add(road);
+
+    // Neon barriers
+    for(let i=0; i<45; i++){
+      const barrier = new THREE.Mesh(
+        new THREE.BoxGeometry(4, 1.5, 1),
+        new THREE.MeshStandardMaterial({ 
+          color:0x0088ff, 
+          emissive:0x0066ff, 
+          emissiveIntensity:0.8,
+          metalness:0.8,
+          roughness:0.2
+        })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      barrier.position.set(lanes[Math.floor(Math.random()*lanes.length)], 0.75, -2030 - i*23);
+      barrier.userData = { hit: false };
+      scene.add(barrier);
+      obstacles.push(barrier);
+    }
+
+    // Neon towers
+    for(let i=0; i<50; i++){
+      const height = 15 + Math.random()*30;
+      const tower = new THREE.Mesh(
+        new THREE.BoxGeometry(5, height, 5),
+        new THREE.MeshStandardMaterial({ 
+          color:0x220066, 
+          emissive:0x4400ff, 
+          emissiveIntensity:0.5,
+          metalness:0.9
+        })
+      );
+      tower.position.set((Math.random()>0.5?1:-1)*(20+Math.random()*15), height/2, -2000 - i*25);
+      tower.userData = { hit: false };
+      scene.add(tower);
+      buildings.push(tower);
+      
+      // Add neon lights
+      const neonLight = new THREE.PointLight(0x00ffff, 4, 40);
+      neonLight.position.set(tower.position.x, height, tower.position.z);
+      scene.add(neonLight);
+    }
+
+    // Floating neon rings
+    for(let i=0; i<30; i++){
+      const ring = new THREE.Mesh(
+        new THREE.TorusGeometry(3, 0.3, 16, 32),
+        new THREE.MeshStandardMaterial({ 
+          color:0xff00ff, 
+          emissive:0xff00ff, 
+          emissiveIntensity:1
+        })
+      );
+      ring.position.set((Math.random()-0.5)*20, 5 + Math.random()*5, -2000 - i*40);
+      ring.rotation.x = Math.PI/2;
+      scene.add(ring);
+    }
+  }
+
+  // LEVEL 4: Mountain Pass (Green/Teal theme)
+  function createLevel4() {
+    scene.background = new THREE.Color(0x0a1a0a);
+    scene.fog = new THREE.Fog(0x003322, 40, 280);
+    
+    scene.children = scene.children.filter(c => c === car || aiCars.includes(c));
+    
+    const ambLight = new THREE.AmbientLight(0x44ffaa, 0.5);
+    scene.add(ambLight);
+    const sun = new THREE.DirectionalLight(0x66ffcc, 0.6);
+    sun.position.set(30,100,0);
+    scene.add(sun);
+
+    // Road
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 1200),
+      new THREE.MeshStandardMaterial({ color:0x1a2a1a })
+    );
+    road.rotation.x = -Math.PI/2;
+    road.position.z = -3600;
+    scene.add(road);
+
+    // Rock obstacles (teal boulders)
+    for(let i=0; i<50; i++){
+      const rock = new THREE.Mesh(
+        new THREE.SphereGeometry(1.5, 8, 6),
+        new THREE.MeshStandardMaterial({ color:0x226644, roughness:0.9 })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      rock.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1.5, -3030 - i*21);
+      rock.userData = { hit: false };
+      scene.add(rock);
+      obstacles.push(rock);
+    }
+
+    // Mountain cliffs (green stone)
+    for(let i=0; i<70; i++){
+      const height = 20 + Math.random()*40;
+      const cliff = new THREE.Mesh(
+        new THREE.BoxGeometry(10, height, 8),
+        new THREE.MeshStandardMaterial({ color:0x115533, roughness:0.8 })
+      );
+      cliff.position.set((Math.random()>0.5?1:-1)*(25+Math.random()*10), height/2, -3000 - i*18);
+      cliff.userData = { hit: false };
+      scene.add(cliff);
+      buildings.push(cliff);
+    }
+
+    // Trees
+    for(let i=0; i<100; i++){
+      const tree = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.5, 1, 8, 8),
+        new THREE.MeshStandardMaterial({ color:0x00aa44 })
+      );
+      tree.position.set((Math.random()>0.5?1:-1)*(18+Math.random()*15), 4, -3000 - i*12);
+      scene.add(tree);
+    }
+  }
+
+  // LEVEL 5: Desert Storm (Yellow/Red theme)
+  function createLevel5() {
+    scene.background = new THREE.Color(0x1a1308);
+    scene.fog = new THREE.Fog(0x443311, 30, 200);
+    
+    scene.children = scene.children.filter(c => c === car || aiCars.includes(c));
+    
+    const ambLight = new THREE.AmbientLight(0xffcc66, 0.7);
+    scene.add(ambLight);
+    const sun = new THREE.DirectionalLight(0xffaa44, 1);
+    sun.position.set(80,100,50);
+    scene.add(sun);
+
+    // Sandy road
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 1200),
+      new THREE.MeshStandardMaterial({ color:0xccaa66, roughness:0.9 })
+    );
+    road.rotation.x = -Math.PI/2;
+    road.position.z = -4600;
+    scene.add(road);
+
+    // Sand dunes (yellow/orange)
+    for(let i=0; i<55; i++){
+      const dune = new THREE.Mesh(
+        new THREE.SphereGeometry(2, 12, 8),
+        new THREE.MeshStandardMaterial({ color:0xdd9944, roughness:0.95 })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      dune.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1, -4030 - i*19);
+      dune.scale.set(1.5, 0.8, 1.5);
+      dune.userData = { hit: false };
+      scene.add(dune);
+      obstacles.push(dune);
+    }
+
+    // Desert rock formations
+    for(let i=0; i<60; i++){
+      const height = 10 + Math.random()*25;
+      const rock = new THREE.Mesh(
+        new THREE.CylinderGeometry(3, 4, height, 6),
+        new THREE.MeshStandardMaterial({ color:0xaa6633, roughness:0.9 })
+      );
+      rock.position.set((Math.random()>0.5?1:-1)*(22+Math.random()*12), height/2, -4000 - i*20);
+      rock.userData = { hit: false };
+      scene.add(rock);
+      buildings.push(rock);
+    }
+
+    // Cacti
+    for(let i=0; i<80; i++){
+      const cactus = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.4, 0.4, 5, 8),
+        new THREE.MeshStandardMaterial({ color:0x339944 })
+      );
+      cactus.position.set((Math.random()>0.5?1:-1)*(15+Math.random()*20), 2.5, -4000 - i*15);
+      scene.add(cactus);
+    }
+
+    // Repair kits for level 5
+    for(let i=0; i<3; i++){
+      const kit = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 0.8, 1.2),
+        new THREE.MeshStandardMaterial({ 
+          color:0x00ff00, 
+          emissive:0x00ff00, 
+          emissiveIntensity:0.5 
+        })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      kit.position.set(lanes[Math.floor(Math.random()*lanes.length)], 0.4, -4100 - i*280);
+      kit.userData = { collected: false };
+      scene.add(kit);
+      repairKits.push(kit);
+    }
+  }
+
+  // LEVEL 6: Cyber City (Pink/Cyan theme)
+  function createLevel6() {
+    scene.background = new THREE.Color(0x0a0515);
+    scene.fog = new THREE.Fog(0x220033, 50, 350);
+    
+    scene.children = scene.children.filter(c => c === car || aiCars.includes(c));
+    
+    const ambLight = new THREE.AmbientLight(0xff44ff, 0.7);
+    scene.add(ambLight);
+    const sun = new THREE.DirectionalLight(0x00ffff, 0.8);
+    sun.position.set(-80,100,-50);
+    scene.add(sun);
+
+    // Glowing road
+    const road = new THREE.Mesh(
+      new THREE.PlaneGeometry(30, 1200),
+      new THREE.MeshStandardMaterial({ 
+        color:0x110022, 
+        emissive:0x330055, 
+        emissiveIntensity:0.5 
+      })
+    );
+    road.rotation.x = -Math.PI/2;
+    road.position.z = -5600;
+    scene.add(road);
+
+    // Holographic obstacles
+    for(let i=0; i<60; i++){
+      const holo = new THREE.Mesh(
+        new THREE.BoxGeometry(2, 3, 2),
+        new THREE.MeshStandardMaterial({ 
+          color:0xff00ff, 
+          emissive:0xff00ff, 
+          emissiveIntensity:1,
+          transparent:true,
+          opacity:0.7
+        })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      holo.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1.5, -5030 - i*18);
+      holo.userData = { hit: false };
+      scene.add(holo);
+      obstacles.push(holo);
+    }
+
+    // Cyber skyscrapers
+    for(let i=0; i<80; i++){
+      const height = 25 + Math.random()*50;
+      const building = new THREE.Mesh(
+        new THREE.BoxGeometry(6, height, 6),
+        new THREE.MeshStandardMaterial({ 
+          color:0x000033, 
+          emissive:0xff0088, 
+          emissiveIntensity:0.6,
+          metalness:1,
+          roughness:0.1
+        })
+      );
+      building.position.set((Math.random()>0.5?1:-1)*(20+Math.random()*15), height/2, -5000 - i*15);
+      building.userData = { hit: false };
+      scene.add(building);
+      buildings.push(building);
+      
+      // Cyber lights
+      const light = new THREE.PointLight(0x00ffff, 5, 50);
+      light.position.set(building.position.x, height, building.position.z);
+      scene.add(light);
+    }
+
+    // Floating data cubes
+    for(let i=0; i<40; i++){
+      const cube = new THREE.Mesh(
+        new THREE.BoxGeometry(1.5, 1.5, 1.5),
+        new THREE.MeshStandardMaterial({ 
+          color:0x00ffff, 
+          emissive:0x00ffff, 
+          emissiveIntensity:1.5,
+          transparent:true,
+          opacity:0.8
+        })
+      );
+      cube.position.set((Math.random()-0.5)*25, 3 + Math.random()*4, -5000 - i*30);
+      cube.rotation.set(Math.random(), Math.random(), Math.random());
+      scene.add(cube);
+    }
+
+    // Repair kits for level 6
+    for(let i=0; i<3; i++){
+      const kit = new THREE.Mesh(
+        new THREE.BoxGeometry(1.2, 0.8, 1.2),
+        new THREE.MeshStandardMaterial({ 
+          color:0x00ff00, 
+          emissive:0x00ff00, 
+          emissiveIntensity:0.5 
+        })
+      );
+      const lanes = [-8, -4, 0, 4, 8];
+      kit.position.set(lanes[Math.floor(Math.random()*lanes.length)], 0.4, -5100 - i*280);
+      kit.userData = { collected: false };
+      scene.add(kit);
+      repairKits.push(kit);
+    }
+  }
+
+  createLevel1();
+
+  // PLAYER CAR
+  car = new THREE.Group();
+
+  body = new THREE.Mesh(
+    new THREE.BoxGeometry(2.4,0.6,5),
+    new THREE.MeshStandardMaterial({ color:0xff0000, metalness:0.9, roughness:0.2 })
+  );
+  car.add(body);
+
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6,0.5,2.2),
+    new THREE.MeshStandardMaterial({ color:0x111111, metalness:0.8, roughness:0.1 })
+  );
+  cabin.position.set(0,0.55,-0.4);
+  car.add(cabin);
+
+  function wheel(x,z){
+    const w = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.35,0.35,0.5,16),
+      new THREE.MeshStandardMaterial({ color:0x000000, metalness:0.7 })
+    );
+    w.rotation.z = Math.PI/2;
+    w.position.set(x,0.25,z);
+    car.add(w);
+  }
+  wheel(-1.2,1.8); wheel(1.2,1.8); wheel(-1.2,-1.8); wheel(1.2,-1.8);
+
+  car.position.y = 0.35;
+  scene.add(car);
+
+  camera.position.set(0,5,10);
+  camera.lookAt(car.position);
+
+  // AI CARS
+  aiCars = [];
+  function createAICars(count) {
+    for(let i=0;i<count;i++){
+      const ai = new THREE.Group();
+
+      const aiBody = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4,0.6,5),
+        new THREE.MeshStandardMaterial({ color:0x0066ff, metalness:0.8, roughness:0.2 })
+      );
+      ai.add(aiBody);
+
+      const aiCabin = new THREE.Mesh(
+        new THREE.BoxGeometry(1.6,0.5,2.2),
+        new THREE.MeshStandardMaterial({ color:0x222222, metalness:0.8, roughness:0.1 })
+      );
+      aiCabin.position.set(0,0.55,-0.4);
+      ai.add(aiCabin);
+
+      function aiWheel(x,z){
+        const w = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.35,0.35,0.5,16),
+          new THREE.MeshStandardMaterial({ color:0x000000, metalness:0.7 })
+        );
+        w.rotation.z = Math.PI/2;
+        w.position.set(x,0.25,z);
+        ai.add(w);
+      }
+      aiWheel(-1.2,1.8); aiWheel(1.2,1.8); aiWheel(-1.2,-1.8); aiWheel(1.2,-1.8);
+
+      ai.position.set((i-3)*3,0.35,-50-i*40);
+      ai.userData = {
+        speed: 220 + Math.random()*130,
+        lane: (i-3)*3,
+        aggression: Math.random(),
+        justHit: false
+      };
+      scene.add(ai);
+      aiCars.push(ai);
+    }
+  }
+  createAICars(6);
+
+  const levelColors = [0xff0000, 0xff8800, 0x0088ff, 0x00ff88, 0xffaa00, 0xff00ff];
+  
+  function levelUp() {
+    level++;
+    body.material.color.setHex(levelColors[(level-1) % levelColors.length]);
+    createAICars(2);
+    physics.maxSpeed += 30;
+    physics.accel += 10;
+    
+    obstacles = [];
+    buildings = [];
+    repairKits = [];
+    
+    if(level === 2) createLevel2();
+    else if(level === 3) createLevel3();
+    else if(level === 4) createLevel4();
+    else if(level === 5) createLevel5();
+    else if(level === 6) createLevel6();
+  }
+
+  const clock = new THREE.Clock();
+
+  function animate(){
+    if(gameState !== 'game') return;
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(),0.05);
+
+    // Weather effects
+    if(weatherType.includes('Rain') || weatherType === 'Snow' || weatherType === 'Storm'){
+      const fallSpeed = weatherType === 'Snow' ? 8 : (weatherType === 'Storm' ? 25 : 15);
+      rainParticles.forEach(particle => {
+        particle.position.y -= fallSpeed * dt;
+        if(particle.position.y < 0){
+          particle.position.y = 30;
+          particle.position.x = car.position.x + (Math.random()-0.5)*100;
+          particle.position.z = car.position.z + (Math.random()-0.5)*100;
+        }
+      });
+    }
+
+    // Adjust visibility based on weather
+    if(weatherType === 'Fog'){
+      scene.fog.near = 20;
+      scene.fog.far = 100;
+    } else if(weatherType === 'Heavy Rain' || weatherType === 'Storm'){
+      scene.fog.near = 30;
+      scene.fog.far = 150;
+    }
+
+    // Adjust physics based on weather
+    let weatherFriction = 1.0;
+    let weatherTurn = 1.0;
+    if(weatherType.includes('Rain') || weatherType === 'Storm'){
+      weatherFriction = 0.97;
+      weatherTurn = 0.8;
+    } else if(weatherType === 'Snow'){
+      weatherFriction = 0.96;
+      weatherTurn = 0.7;
+    }
+
+    if(keys['ArrowUp']) speed += physics.accel*dt;
+    if(keys['ArrowDown']) speed -= physics.accel*dt;
+
+    speed *= physics.friction * weatherFriction;
+
+    let drifting = keys['z'] && Math.abs(steerInput) > 0.1;
+    if(drifting){
+      driftPower += dt * 2;
+      driftPower = Math.min(driftPower, 3);
+    } else if(driftPower > 0){
+      speed += driftPower * 50;
+      driftPower = 0;
+    }
+
+    let effectiveSpeed = speed;
+    effectiveSpeed = THREE.MathUtils.clamp(effectiveSpeed,-physics.maxSpeed,physics.maxSpeed);
+
+    let targetSteer = 0;
+    if(keys['ArrowLeft']) targetSteer = 1;
+    if(keys['ArrowRight']) targetSteer = -1;
+
+    steerInput = THREE.MathUtils.lerp(steerInput, targetSteer, physics.steerSmooth);
+
+    car.rotation.y += steerInput*physics.turn*dt*weatherTurn;
+
+    const forward = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
+    car.position.add(forward.multiplyScalar(effectiveSpeed*dt*0.18));
+
+    distance += Math.abs(speed * dt * 0.18);
+    if(distance > level * 1000 && level < 6) levelUp();
+
+    // AI movement
+    aiCars.forEach(ai=>{
+      const targetLane = Math.abs(car.position.z - ai.position.z) < 35 && ai.userData.aggression > 0.4
+        ? THREE.MathUtils.clamp(car.position.x + (ai.userData.aggression>0.7?3:-3), -10, 10)
+        : ai.userData.lane;
+
+      ai.position.x += (targetLane - ai.position.x) * dt * 1.5;
+      const steerAI = (targetLane - ai.position.x) * 0.05;
+      ai.rotation.y += steerAI;
+
+      const fwd = new THREE.Vector3(0,0,-1).applyQuaternion(ai.quaternion);
+      ai.position.add(fwd.multiplyScalar(ai.userData.speed * dt * 0.05));
+
+      if(ai.position.distanceTo(car.position) < 3 && !ai.userData.justHit){
+        playerHits += 1;
+        ai.userData.justHit = true;
+        setTimeout(() => ai.userData.justHit = false, 2000);
+        
+        if(playerHits >= 3){
+          alert('You crashed! Race Over');
+          location.reload();
+        }
+      }
+
+      if(Math.abs(ai.position.z - car.position.z) > 300){
+        ai.position.z = car.position.z - 100 + Math.random()*200;
+        ai.userData.lane = (Math.random()-0.5)*10;
+      }
+    });
+
+    // Obstacle collision
+    for(const o of obstacles){
+      if(!o.userData.hit && car.position.distanceTo(o.position) < 3.5){
+        o.userData.hit = true;
+        playerHits += 1;
+        if(playerHits >= 3){
+          alert('You crashed into an obstacle! Race Over');
+          location.reload();
+        }
+        scene.remove(o);
+        obstacles.splice(obstacles.indexOf(o),1);
+        break;
+      }
+    }
+    
+    // Building collision
+    for(const b of buildings){
+      if(!b.userData.hit && car.position.distanceTo(b.position) < 5){
+        b.userData.hit = true;
+        playerHits += 1;
+        if(playerHits >= 3){
+          alert('You crashed into a building! Race Over');
+          location.reload();
+        }
+        break;
+      }
+    }
+
+    // Repair kit collection
+    for(let i = repairKits.length - 1; i >= 0; i--){
+      const kit = repairKits[i];
+      if(!kit.userData.collected && car.position.distanceTo(kit.position) < 2){
+        kit.userData.collected = true;
+        if(playerHits > 0){
+          playerHits -= 1;
+        }
+        scene.remove(kit);
+        repairKits.splice(i, 1);
+      }
+    }
+
+    // Camera
+    const camOffset = new THREE.Vector3(0,5,10+Math.abs(speed)*0.02)
+      .applyQuaternion(car.quaternion);
+    camera.position.lerp(car.position.clone().add(camOffset),0.15);
+    camera.lookAt(car.position);
+
+    document.getElementById('speed').innerText = Math.abs(speed).toFixed(0);
+    document.getElementById('hits').innerText = playerHits;
+    document.getElementById('level').innerText = level;
+    document.getElementById('distance').innerText = distance.toFixed(0);
+    document.getElementById('weather').innerText = weatherType;
+
+    renderer.render(scene,camera);
+  }
+
+  animate();
+}
+</script>
+</body>
+</html>
