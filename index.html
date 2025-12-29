@@ -83,8 +83,8 @@ function initGame() {
   driftPower = 0;
 
   physics = {
-    maxSpeed:450,
-    accel:250,
+    maxSpeed:200,
+    accel:100,
     turn:2.5,
     friction:0.988,
     steerSmooth:0.8
@@ -688,8 +688,8 @@ function initGame() {
     level++;
     body.material.color.setHex(levelColors[(level-1) % levelColors.length]);
     createAICars(2);
-    physics.maxSpeed += 30;
-    physics.accel += 10;
+    physics.maxSpeed += 15;
+    physics.accel += 5;
     
     obstacles = [];
     buildings = [];
@@ -731,21 +731,18 @@ function initGame() {
       scene.fog.far = 150;
     }
 
-    // Adjust physics based on weather
-    let weatherFriction = 1.0;
+    // Adjust steering based on weather (speed stays the same)
     let weatherTurn = 1.0;
     if(weatherType.includes('Rain') || weatherType === 'Storm'){
-      weatherFriction = 0.97;
       weatherTurn = 0.8;
     } else if(weatherType === 'Snow'){
-      weatherFriction = 0.96;
       weatherTurn = 0.7;
     }
 
     if(keys['ArrowUp']) speed += physics.accel*dt;
     if(keys['ArrowDown']) speed -= physics.accel*dt;
 
-    speed *= physics.friction * weatherFriction;
+    speed *= physics.friction;
 
     let drifting = keys['z'] && Math.abs(steerInput) > 0.1;
     if(drifting){
@@ -768,9 +765,9 @@ function initGame() {
     car.rotation.y += steerInput*physics.turn*dt*weatherTurn;
 
     const forward = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
-    car.position.add(forward.multiplyScalar(effectiveSpeed*dt*0.18));
+    car.position.add(forward.multiplyScalar(effectiveSpeed*dt*0.5));
 
-    distance += Math.abs(speed * dt * 0.18);
+    distance += Math.abs(speed * dt * 0.5);
     if(distance > level * 1000 && level < 6) levelUp();
 
     // AI movement
