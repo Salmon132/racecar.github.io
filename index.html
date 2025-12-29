@@ -39,6 +39,9 @@
 <div id="homeScreen">
   <h1>🏎️ NFS RACING 🏎️</h1>
   <button id="startGame">START RACE</button>
+  <audio id="menuMusic" loop>
+    <source src="GeoDash.mp4" type="audio/mp4">
+  </audio>
 </div>
 <div id="hud">
   Speed: <span id="speed">0</span> km/h | 
@@ -56,7 +59,20 @@ document.getElementById('startGame').addEventListener('click', () => {
   gameState = 'game';
   document.getElementById('homeScreen').style.display = 'none';
   document.getElementById('hud').style.display = 'block';
+  
+  // Stop menu music
+  const menuMusic = document.getElementById('menuMusic');
+  menuMusic.pause();
+  menuMusic.currentTime = 0;
+  
   initGame();
+});
+
+// Play menu music when page loads
+window.addEventListener('load', () => {
+  const menuMusic = document.getElementById('menuMusic');
+  menuMusic.volume = 0.5;
+  menuMusic.play().catch(e => console.log('Audio autoplay prevented'));
 });
 
 let scene, camera, renderer, car, aiCars = [], obstacles = [], buildings = [], repairKits = [], rainParticles = [], physics, keys, speed, playerHits, level, distance, steerInput, body, driftPower, weatherType;
@@ -137,7 +153,7 @@ function initGame() {
 
     // Road
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 1200),
+      new THREE.PlaneGeometry(50, 1200),
       new THREE.MeshStandardMaterial({ color:0x1a1a1a })
     );
     road.rotation.x = -Math.PI/2;
@@ -236,7 +252,7 @@ function initGame() {
 
     // Road
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 1200),
+      new THREE.PlaneGeometry(50, 1200),
       new THREE.MeshStandardMaterial({ color:0x2a2010 })
     );
     road.rotation.x = -Math.PI/2;
@@ -299,7 +315,7 @@ function initGame() {
 
     // Road (purple tint)
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 1200),
+      new THREE.PlaneGeometry(50, 1200),
       new THREE.MeshStandardMaterial({ color:0x1a0a2a, emissive:0x220044, emissiveIntensity:0.3 })
     );
     road.rotation.x = -Math.PI/2;
@@ -379,7 +395,7 @@ function initGame() {
 
     // Road
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 1200),
+      new THREE.PlaneGeometry(50, 1200),
       new THREE.MeshStandardMaterial({ color:0x1a2a1a })
     );
     road.rotation.x = -Math.PI/2;
@@ -438,7 +454,7 @@ function initGame() {
 
     // Sandy road
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 1200),
+      new THREE.PlaneGeometry(50, 1200),
       new THREE.MeshStandardMaterial({ color:0xccaa66, roughness:0.9 })
     );
     road.rotation.x = -Math.PI/2;
@@ -515,7 +531,7 @@ function initGame() {
 
     // Glowing road
     const road = new THREE.Mesh(
-      new THREE.PlaneGeometry(30, 1200),
+      new THREE.PlaneGeometry(50, 1200),
       new THREE.MeshStandardMaterial({ 
         color:0x110022, 
         emissive:0x330055, 
@@ -768,7 +784,13 @@ function initGame() {
     car.position.add(forward.multiplyScalar(effectiveSpeed*dt*0.5));
 
     distance += Math.abs(speed * dt * 0.5);
-    if(distance > level * 1000 && level < 6) levelUp();
+    if(distance > level * 1000 && level < 6) {
+      levelUp();
+    } else if(distance > 6000 && level === 6) {
+      // Game completed!
+      alert('🏆 Congratulations! You completed all 6 levels! 🏆');
+      location.reload();
+    }
 
     // AI movement
     aiCars.forEach(ai=>{
