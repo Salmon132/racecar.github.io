@@ -109,7 +109,7 @@ function initGame() {
   // Create weather particles
   rainParticles = [];
   if(weatherType.includes('Rain') || weatherType === 'Snow' || weatherType === 'Storm'){
-    const particleCount = weatherType === 'Heavy Rain' || weatherType === 'Storm' ? 300 : weatherType === 'Snow' ? 200 : 150;
+    const particleCount = weatherType === 'Heavy Rain' || weatherType === 'Storm' ? 200 : weatherType === 'Snow' ? 150 : 100;
     for(let i=0; i<particleCount; i++){
       let particle;
       if(weatherType === 'Snow'){
@@ -164,21 +164,21 @@ function initGame() {
     }
 
     // Street lights
-    for(let i=0; i<50; i++){
+    for(let i=0; i<30; i++){
       const pole = new THREE.Mesh(
         new THREE.CylinderGeometry(0.2, 0.2, 8, 8),
         new THREE.MeshStandardMaterial({ color:0x333333 })
       );
-      pole.position.set((i%2===0?1:-1)*16, 4, -i*25);
+      pole.position.set((i%2===0?1:-1)*16, 4, -i*40);
       scene.add(pole);
       
       const light = new THREE.PointLight(0xff8800, 2, 20);
-      light.position.set((i%2===0?1:-1)*16, 7, -i*25);
+      light.position.set((i%2===0?1:-1)*16, 7, -i*40);
       scene.add(light);
     }
 
     // Red/orange obstacles (traffic cones and barriers)
-    for(let i=0; i<35; i++){
+    for(let i=0; i<30; i++){
       const isCone = Math.random() > 0.5;
       let obs;
       if(isCone){
@@ -200,13 +200,13 @@ function initGame() {
     }
 
     // Buildings (dark red)
-    for(let i=0; i<80; i++){
+    for(let i=0; i<50; i++){
       const height = 8 + Math.random()*20;
       const building = new THREE.Mesh(
         new THREE.BoxGeometry(6, height, 6),
         new THREE.MeshStandardMaterial({ color:0x331111, emissive:0x220000, emissiveIntensity:0.2 })
       );
-      building.position.set((Math.random()>0.5?1:-1)*(20+Math.random()*10), height/2, -i*15);
+      building.position.set((Math.random()>0.5?1:-1)*(20+Math.random()*10), height/2, -i*20);
       building.userData = { hit: false };
       scene.add(building);
       buildings.push(building);
@@ -253,33 +253,33 @@ function initGame() {
     scene.add(road);
 
     // Orange cylinders (barrels)
-    for(let i=0; i<40; i++){
+    for(let i=0; i<35; i++){
       const barrel = new THREE.Mesh(
         new THREE.CylinderGeometry(1, 1, 2.5, 12),
         new THREE.MeshStandardMaterial({ color:0xff8800, metalness:0.6, roughness:0.3 })
       );
       const lanes = [-8, -4, 0, 4, 8];
-      barrel.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1.25, -1030 - i*25);
+      barrel.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1.25, -1030 - i*28);
       barrel.userData = { hit: false };
       scene.add(barrel);
       obstacles.push(barrel);
     }
 
     // Industrial structures (yellow metal)
-    for(let i=0; i<60; i++){
+    for(let i=0; i<40; i++){
       const height = 5 + Math.random()*15;
       const structure = new THREE.Mesh(
         new THREE.BoxGeometry(8, height, 8),
         new THREE.MeshStandardMaterial({ color:0x886600, metalness:0.7, roughness:0.4 })
       );
-      structure.position.set((Math.random()>0.5?1:-1)*(22+Math.random()*8), height/2, -1000 - i*20);
+      structure.position.set((Math.random()>0.5?1:-1)*(22+Math.random()*8), height/2, -1000 - i*25);
       structure.userData = { hit: false };
       scene.add(structure);
       buildings.push(structure);
     }
 
     // Smoke stacks with lights
-    for(let i=0; i<20; i++){
+    for(let i=0; i<15; i++){
       const stack = new THREE.Mesh(
         new THREE.CylinderGeometry(2, 2, 25, 12),
         new THREE.MeshStandardMaterial({ color:0x444444, metalness:0.5 })
@@ -316,7 +316,7 @@ function initGame() {
     scene.add(road);
 
     // Neon barriers
-    for(let i=0; i<45; i++){
+    for(let i=0; i<38; i++){
       const barrier = new THREE.Mesh(
         new THREE.BoxGeometry(4, 1.5, 1),
         new THREE.MeshStandardMaterial({ 
@@ -328,14 +328,14 @@ function initGame() {
         })
       );
       const lanes = [-8, -4, 0, 4, 8];
-      barrier.position.set(lanes[Math.floor(Math.random()*lanes.length)], 0.75, -2030 - i*23);
+      barrier.position.set(lanes[Math.floor(Math.random()*lanes.length)], 0.75, -2030 - i*26);
       barrier.userData = { hit: false };
       scene.add(barrier);
       obstacles.push(barrier);
     }
 
     // Neon towers
-    for(let i=0; i<50; i++){
+    for(let i=0; i<35; i++){
       const height = 15 + Math.random()*30;
       const tower = new THREE.Mesh(
         new THREE.BoxGeometry(5, height, 5),
@@ -346,19 +346,21 @@ function initGame() {
           metalness:0.9
         })
       );
-      tower.position.set((Math.random()>0.5?1:-1)*(20+Math.random()*15), height/2, -2000 - i*25);
+      tower.position.set((Math.random()>0.5?1:-1)*(20+Math.random()*15), height/2, -2000 - i*28);
       tower.userData = { hit: false };
       scene.add(tower);
       buildings.push(tower);
       
-      // Add neon lights
-      const neonLight = new THREE.PointLight(0x00ffff, 4, 40);
-      neonLight.position.set(tower.position.x, height, tower.position.z);
-      scene.add(neonLight);
+      // Add neon lights (every other tower)
+      if(i % 2 === 0){
+        const neonLight = new THREE.PointLight(0x00ffff, 4, 40);
+        neonLight.position.set(tower.position.x, height, tower.position.z);
+        scene.add(neonLight);
+      }
     }
 
     // Floating neon rings
-    for(let i=0; i<30; i++){
+    for(let i=0; i<20; i++){
       const ring = new THREE.Mesh(
         new THREE.TorusGeometry(3, 0.3, 16, 32),
         new THREE.MeshStandardMaterial({ 
@@ -367,7 +369,7 @@ function initGame() {
           emissiveIntensity:1
         })
       );
-      ring.position.set((Math.random()-0.5)*20, 5 + Math.random()*5, -2000 - i*40);
+      ring.position.set((Math.random()-0.5)*20, 5 + Math.random()*5, -2000 - i*50);
       ring.rotation.x = Math.PI/2;
       scene.add(ring);
     }
@@ -396,38 +398,38 @@ function initGame() {
     scene.add(road);
 
     // Rock obstacles (teal boulders)
-    for(let i=0; i<50; i++){
+    for(let i=0; i<40; i++){
       const rock = new THREE.Mesh(
         new THREE.SphereGeometry(1.5, 8, 6),
         new THREE.MeshStandardMaterial({ color:0x226644, roughness:0.9 })
       );
       const lanes = [-8, -4, 0, 4, 8];
-      rock.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1.5, -3030 - i*21);
+      rock.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1.5, -3030 - i*25);
       rock.userData = { hit: false };
       scene.add(rock);
       obstacles.push(rock);
     }
 
     // Mountain cliffs (green stone)
-    for(let i=0; i<70; i++){
+    for(let i=0; i<50; i++){
       const height = 20 + Math.random()*40;
       const cliff = new THREE.Mesh(
         new THREE.BoxGeometry(10, height, 8),
         new THREE.MeshStandardMaterial({ color:0x115533, roughness:0.8 })
       );
-      cliff.position.set((Math.random()>0.5?1:-1)*(25+Math.random()*10), height/2, -3000 - i*18);
+      cliff.position.set((Math.random()>0.5?1:-1)*(25+Math.random()*10), height/2, -3000 - i*20);
       cliff.userData = { hit: false };
       scene.add(cliff);
       buildings.push(cliff);
     }
 
     // Trees
-    for(let i=0; i<100; i++){
+    for(let i=0; i<60; i++){
       const tree = new THREE.Mesh(
         new THREE.CylinderGeometry(0.5, 1, 8, 8),
         new THREE.MeshStandardMaterial({ color:0x00aa44 })
       );
-      tree.position.set((Math.random()>0.5?1:-1)*(18+Math.random()*15), 4, -3000 - i*12);
+      tree.position.set((Math.random()>0.5?1:-1)*(18+Math.random()*15), 4, -3000 - i*17);
       scene.add(tree);
     }
   }
@@ -455,13 +457,13 @@ function initGame() {
     scene.add(road);
 
     // Sand dunes (yellow/orange)
-    for(let i=0; i<55; i++){
+    for(let i=0; i<45; i++){
       const dune = new THREE.Mesh(
         new THREE.SphereGeometry(2, 12, 8),
         new THREE.MeshStandardMaterial({ color:0xdd9944, roughness:0.95 })
       );
       const lanes = [-8, -4, 0, 4, 8];
-      dune.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1, -4030 - i*19);
+      dune.position.set(lanes[Math.floor(Math.random()*lanes.length)], 1, -4030 - i*22);
       dune.scale.set(1.5, 0.8, 1.5);
       dune.userData = { hit: false };
       scene.add(dune);
@@ -469,25 +471,25 @@ function initGame() {
     }
 
     // Desert rock formations
-    for(let i=0; i<60; i++){
+    for(let i=0; i<40; i++){
       const height = 10 + Math.random()*25;
       const rock = new THREE.Mesh(
         new THREE.CylinderGeometry(3, 4, height, 6),
         new THREE.MeshStandardMaterial({ color:0xaa6633, roughness:0.9 })
       );
-      rock.position.set((Math.random()>0.5?1:-1)*(22+Math.random()*12), height/2, -4000 - i*20);
+      rock.position.set((Math.random()>0.5?1:-1)*(22+Math.random()*12), height/2, -4000 - i*25);
       rock.userData = { hit: false };
       scene.add(rock);
       buildings.push(rock);
     }
 
     // Cacti
-    for(let i=0; i<80; i++){
+    for(let i=0; i<50; i++){
       const cactus = new THREE.Mesh(
         new THREE.CylinderGeometry(0.4, 0.4, 5, 8),
         new THREE.MeshStandardMaterial({ color:0x339944 })
       );
-      cactus.position.set((Math.random()>0.5?1:-1)*(15+Math.random()*20), 2.5, -4000 - i*15);
+      cactus.position.set((Math.random()>0.5?1:-1)*(15+Math.random()*20), 2.5, -4000 - i*20);
       scene.add(cactus);
     }
 
