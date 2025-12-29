@@ -39,10 +39,10 @@
 <div id="homeScreen">
   <h1>🏎️ NFS RACING 🏎️</h1>
   <button id="startGame">START RACE</button>
-  <audio id="menuMusic" loop>
-    <source src="GeoDash.mp3" type="audio/mpeg">
-  </audio>
 </div>
+<audio id="menuMusic" loop>
+  <source src="GeoDash.mp3" type="audio/mpeg">
+</audio>
 <div id="hud">
   Speed: <span id="speed">0</span> km/h | 
   Hits: <span id="hits">0</span>/3 | 
@@ -55,24 +55,25 @@
 <script>
 let gameState = 'home';
 
+// Play menu music on first user interaction
+let musicStarted = false;
 document.getElementById('startGame').addEventListener('click', () => {
-  gameState = 'game';
-  document.getElementById('homeScreen').style.display = 'none';
-  document.getElementById('hud').style.display = 'block';
-  
-  // Stop menu music
   const menuMusic = document.getElementById('menuMusic');
-  menuMusic.pause();
-  menuMusic.currentTime = 0;
   
-  initGame();
-});
-
-// Play menu music when page loads
-window.addEventListener('load', () => {
-  const menuMusic = document.getElementById('menuMusic');
-  menuMusic.volume = 0.5;
-  menuMusic.play().catch(e => console.log('Audio autoplay prevented'));
+  if(!musicStarted){
+    menuMusic.volume = 0.5;
+    menuMusic.play().catch(e => console.log('Audio play failed:', e));
+    musicStarted = true;
+  }
+  
+  // Small delay to let music start before transitioning
+  setTimeout(() => {
+    gameState = 'game';
+    document.getElementById('homeScreen').style.display = 'none';
+    document.getElementById('hud').style.display = 'block';
+    menuMusic.pause();
+    initGame();
+  }, 100);
 });
 
 let scene, camera, renderer, car, aiCars = [], obstacles = [], buildings = [], repairKits = [], rainParticles = [], physics, keys, speed, playerHits, level, distance, steerInput, body, driftPower, weatherType;
