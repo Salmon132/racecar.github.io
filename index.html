@@ -55,25 +55,17 @@
 <script>
 let gameState = 'home';
 
-// Play menu music on first user interaction
-let musicStarted = false;
 document.getElementById('startGame').addEventListener('click', () => {
+  gameState = 'game';
+  document.getElementById('homeScreen').style.display = 'none';
+  document.getElementById('hud').style.display = 'block';
+  
+  // Play music during gameplay
   const menuMusic = document.getElementById('menuMusic');
+  menuMusic.volume = 0.5;
+  menuMusic.play().catch(e => console.log('Audio play failed:', e));
   
-  if(!musicStarted){
-    menuMusic.volume = 0.5;
-    menuMusic.play().catch(e => console.log('Audio play failed:', e));
-    musicStarted = true;
-  }
-  
-  // Small delay to let music start before transitioning
-  setTimeout(() => {
-    gameState = 'game';
-    document.getElementById('homeScreen').style.display = 'none';
-    document.getElementById('hud').style.display = 'block';
-    menuMusic.pause();
-    initGame();
-  }, 100);
+  initGame();
 });
 
 let scene, camera, renderer, car, aiCars = [], obstacles = [], buildings = [], repairKits = [], rainParticles = [], physics, keys, speed, playerHits, level, distance, steerInput, body, driftPower, weatherType;
