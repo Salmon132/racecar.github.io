@@ -776,6 +776,9 @@ function initGame() {
     const forward = new THREE.Vector3(0,0,-1).applyQuaternion(car.quaternion);
     car.position.add(forward.multiplyScalar(effectiveSpeed*dt*0.5));
 
+    // Invisible barriers to prevent cheating (keep car on road)
+    car.position.x = THREE.MathUtils.clamp(car.position.x, -22, 22);
+
     distance += Math.abs(speed * dt * 0.5);
     if(distance > level * 1000 && level < 6) {
       levelUp();
