@@ -784,9 +784,15 @@ function initGame() {
     if(distance > level * 1000 && level < 6) {
       levelUp();
     } else if(distance > 6000 && level === 6) {
-      // Game completed!
-      alert('🏆 Congratulations! You completed all 6 levels! 🏆');
-      location.reload();
+      // Game completed! Reset first, then show message
+      const menuMusic = document.getElementById('menuMusic');
+      menuMusic.pause();
+      menuMusic.currentTime = 0;
+      
+      setTimeout(() => {
+        alert('🏆 Congratulations! You completed all 6 levels! 🏆');
+        location.reload();
+      }, 100);
     }
 
     // AI movement
